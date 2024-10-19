@@ -49,19 +49,15 @@ func extractLinksFromString(input string) []string {
 
 // OnText handles incoming text messages
 func (x *Controller) OnText(c telebot.Context) error {
-	// Create a Recipient for the required channel
-	channel := &telebot.Chat{UserName: "Nexiuo"} // Set the username of the channel
-	user := c.Sender() // This is the user sending the message
-
 	// Check if the user is a member of the required channel
-	member, err := c.Bot().ChatMemberOf(channel, user)
+	member, err := c.Bot().ChatMemberOf(requiredChannelID, c.Sender())
 	if err != nil {
 		logging.Error(err)
 		return x.replyError(c, "Error checking subscription status. Please try again later.")
 	}
 
 	// If the user is not a member or has restricted access
-	if member.Role != telebot.ChatMember.Member && member.Role != telebot.ChatMember.Administrator {
+	if member.Role != telebot.Member && member.Role != telebot.Administrator {
 		return x.promptSubscription(c)
 	}
 
