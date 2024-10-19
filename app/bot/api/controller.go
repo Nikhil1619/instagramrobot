@@ -49,8 +49,12 @@ func extractLinksFromString(input string) []string {
 
 // OnText handles incoming text messages
 func (x *Controller) OnText(c telebot.Context) error {
+	// Assuming the channel's ID is known (you can find it in Telegram)
+	const requiredChannelID int64 = -1001321487892 // Replace with your channel ID
+	// Create a Recipient for the required channel using its ID
+	channel := &telebot.Chat{ID: requiredChannelID}
 	// Check if the user is a member of the required channel
-	member, err := c.Bot().ChatMemberOf(requiredChannelID, c.Sender())
+	member, err := c.Bot().ChatMemberOf(channel, c.Sender())
 	if err != nil {
 		logging.Error(err)
 		return x.replyError(c, "Error checking subscription status. Please try again later.")
