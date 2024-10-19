@@ -49,12 +49,11 @@ func extractLinksFromString(input string) []string {
 
 // OnText handles incoming text messages
 func (x *Controller) OnText(c telebot.Context) error {
-	// Use the required channel ID from the config
+	// Get the required channel ID from the config
 	requiredChannelID := int64(-1001321487892) // Replace with your channel ID
-	channel := &telebot.Chat{ID: requiredChannelID}
 
 	// Check if the user is in the required channel
-	isInChannel, err := x.isUserInChannel(c)
+	isInChannel, err := x.isUserInChannel(c, requiredChannelID)
 	if err != nil {
 		logging.Error(err)
 		return x.replyError(c, "Error checking subscription status.")
@@ -86,8 +85,7 @@ func (x *Controller) OnText(c telebot.Context) error {
 }
 
 // isUserInChannel checks if the user is in the required channel
-func (x *Controller) isUserInChannel(c telebot.Context) (bool, error) {
-	requiredChannelID := int64(-1001321487892) // Replace with your channel ID
+func (x *Controller) isUserInChannel(c telebot.Context, requiredChannelID int64) (bool, error) {
 	channel := &telebot.Chat{ID: requiredChannelID}
 	member, err := c.Bot().ChatMemberOf(channel, c.Sender())
 	if err != nil {
