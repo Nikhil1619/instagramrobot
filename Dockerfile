@@ -1,4 +1,3 @@
-# Stage 1: Build stage
 FROM golang:1.22-alpine as build
 
 # Set the working directory
@@ -8,36 +7,42 @@ WORKDIR /go/src/app
 COPY ["go.mod", "go.sum", "./"]
 
 # Download dependencies
-RUN go mod download
+RUN ["go", "mod", "download"]
 
 # Copy project files
 COPY . .
 
-# Disable CGO for static builds
+# The cgo tool is enabled by default for native builds on systems where it is expected to work.
+# It is disabled by default when cross-compiling
 ENV CGO_ENABLED=0
+
+# Controls the source of Go module downloads
+# Can help assure builds are deterministic and secure.
 ENV GOPROXY=https://proxy.golang.org
 
-# Build the bot binary
-RUN go build -o build/insta-fetcher-bot cmd/bot/main.go
+# Executable filename (binary file)
+ENV APP_NAME=insta-fetcher
 
-# Build the web binary
-RUN go build -o build/insta-fetcher-web cmd/web/main.go
+# Build binary file
+RUN ["go", "build", "-o", "build/${APP_NAME}", "cmd/bot/main.go"]
 
-# Create start.sh script in the build stage and ensure it is executable
-RUN echo '#!/bin/sh\n./web &\n./bot' > start.sh && chmod +x start.sh
+#
+# Development build
+#
+FROM build as dev
 
-# Stage 2: Production stage
+# Run the application via Go
+CMD ["go", "run", "."]
+
+#
+# Production build
+#
 FROM gcr.io/distroless/static-debian12 as prod
 
 # Set the working directory
 WORKDIR /home/app/
 
-# Copy the bot and web binaries from the build stage
-COPY --from=build /go/src/app/build/insta-fetcher-bot ./bot
-COPY --from=build /go/src/app/build/insta-fetcher-web ./web
+COPY --from=build /go/src/app/build/${APP_NAME} ./
 
-# Copy the already executable start script
-COPY --from=build /go/src/app/start.sh ./start.sh
-
-# Run the start script
-CMD ["./start.sh"]
+# Execute the binary file
+CMD ["./${APP_NAME}"]
