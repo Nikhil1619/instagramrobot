@@ -49,11 +49,18 @@ func extractLinksFromString(input string) []string {
 
 // OnText handles incoming text messages
 func (x *Controller) OnText(c telebot.Context) error {
-	// Assuming the channel's ID is known (replace with your channel ID)
-	const requiredChannelID int64 = -1001321487892 
+	// Use the required channel ID from the config
+	requiredChannelID := int64(-1001321487892) // Replace with your channel ID
 	channel := &telebot.Chat{ID: requiredChannelID}
 
-	if isInChannel, err := x.isUserInChannel(c); !isInChannel {
+	// Check if the user is in the required channel
+	isInChannel, err := x.isUserInChannel(c)
+	if err != nil {
+		logging.Error(err)
+		return x.replyError(c, "Error checking subscription status.")
+	}
+
+	if !isInChannel {
 		return x.promptSubscription(c)
 	}
 
@@ -80,6 +87,7 @@ func (x *Controller) OnText(c telebot.Context) error {
 
 // isUserInChannel checks if the user is in the required channel
 func (x *Controller) isUserInChannel(c telebot.Context) (bool, error) {
+	requiredChannelID := int64(-1001321487892) // Replace with your channel ID
 	channel := &telebot.Chat{ID: requiredChannelID}
 	member, err := c.Bot().ChatMemberOf(channel, c.Sender())
 	if err != nil {
@@ -90,7 +98,7 @@ func (x *Controller) isUserInChannel(c telebot.Context) (bool, error) {
 
 // promptSubscription prompts the user to subscribe to the required channel
 func (*Controller) promptSubscription(c telebot.Context) error {
-	message := fmt.Sprintf("🚨 To use this bot, you need to join our channel: @Nexiuo", requiredChannelID)
+	message := "🚨 To use this bot, you need to join our channel: @Nexiuo" // Channel username
 	_, err := c.Bot().Send(c.Sender(), message)
 	if err != nil {
 		return fmt.Errorf("couldn't prompt for subscription: %w", err)
@@ -108,7 +116,7 @@ func (x *Controller) processLinks(links []string, m *telebot.Message) error {
 
 	for index, link := range links {
 		if index == 3 {
-			logging.Errorf("can't process more than %c links per message", 3)
+			logging.Errorf("can't process more than %d links per message", 3)
 			break
 		}
 		if err := linkProcessor.ProcessLink(link); err != nil {
