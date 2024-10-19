@@ -13,9 +13,6 @@ import (
 	"github.com/omegaatt36/instagramrobot/logging"
 )
 
-// Replace with your actual group chat ID
-const AllowedGroupID = int64(-1001574965898) // Replace with the actual group chat ID
-
 // Controller is the main controller for the bot.
 type Controller struct {
 	bot *telebot.Bot // Bot instance
@@ -28,10 +25,9 @@ func NewController(b *telebot.Bot) *Controller {
 
 // OnStart is the entry point for the incoming update
 func (*Controller) OnStart(c telebot.Context) error {
-	// Check if the message is from the allowed group
-	if c.Chat().ID != AllowedGroupID {
-		logging.Info("Start command received from unauthorized group/chat")
-		return nil // Ignore command in unauthorized chats
+	// Ignore channels and groups
+	if c.Chat().Type != telebot.ChatPrivate {
+		return nil
 	}
 
 	if err := c.Reply("Hello! I'm instagram keeper, post some instagram public post/reels to me."); err != nil {
@@ -41,31 +37,32 @@ func (*Controller) OnStart(c telebot.Context) error {
 	return nil
 }
 
-// extractLinksFromString lets you extract HTTP links from a string
+// extractLinksFromString lets you to extract HTTP links from a string
 func extractLinksFromString(input string) []string {
 	regex := `(http|ftp|https)://([\w_-]+(?:(?:\.[\w_-]+)+))([\w.,@?^=%&:/~+#-]*[\w@?^=%&/~+#-])?`
 	r := regexp.MustCompile(regex)
 	return r.FindAllString(input, -1)
 }
 
-// OnText is the entry point for the incoming update
+// Handler is the entry point for the incoming update
 func (x *Controller) OnText(c telebot.Context) error {
-	// Check if the message is from the allowed group
-	if c.Chat().ID != AllowedGroupID {
-		logging.Info("Text command received from unauthorized group/chat")
-		return nil // Ignore command in unauthorized chats
-	}
-
 	links := extractLinksFromString(c.Message().Text)
 
 	// Send proper error if text has no link inside
 	if len(links) == 0 {
-		//logging.Error("Invalid command,\nPlease send the Instagram post link.")
-		return nil // Ignore
-		// return x.replyError(c, "Invalid command,\nPlease send the Instagram post link.")
+		if c.Chat().Type != telebot.ChatPrivate {
+			return nil
+		}
+
+		logging.Error("Invalid command,\nPlease send the Instagram post link.")
+		return x.replyError(c, "Invalid command,\nPlease send the Instagram post link.")
 	}
 
 	if err := x.processLinks(links, c.Message()); err != nil {
+		if c.Chat().Type != telebot.ChatPrivate {
+			return nil
+		}
+
 		logging.Error(err)
 		return x.replyError(c, err.Error())
 	}
@@ -73,7 +70,8 @@ func (x *Controller) OnText(c telebot.Context) error {
 	return nil
 }
 
-// processLinks gets list of links from user message text and processes each one of them one by one.
+// Gets list of links from user message text
+// and processes each one of them one by one.
 func (x *Controller) processLinks(links []string, m *telebot.Message) error {
 	linkProcessor := providers.NewLinkProcessor(providers.NewLinkProcessorRequest{
 		InstagramFetcher: instagram.NewInstagramFetcher(),
@@ -95,7 +93,8 @@ func (x *Controller) processLinks(links []string, m *telebot.Message) error {
 	return nil
 }
 
-// replyError will send the error to specific Telegram chat with a pre-defined structure
+// replyError will sends the error to specific Telegram chat
+// with a pre-defined structure
 func (*Controller) replyError(c telebot.Context, text string) error {
 	_, err := c.Bot().Reply(c.Message(), fmt.Sprintf("⚠️ *Oops, ERROR!*\n\n`%v`", text), telebot.ModeMarkdown)
 	if err != nil {
@@ -103,4 +102,5 @@ func (*Controller) replyError(c telebot.Context, text string) error {
 	}
 
 	return nil
+
 }
