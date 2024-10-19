@@ -49,15 +49,8 @@ func (m *MediaSender) sendSingleMedia(media *domain.Media) error {
 
 	mediaToSend := convertMediaToInputtable(media)
 
-	_, err := m.bot.Send(m.msg.Chat, mediaToSend)
-	if err != nil {
-		// Handle specific error for large files
-		if err.Error() == "telegram: Bad Request: wrong file identifier/HTTP URL specified" {
-			logging.Warnf("Skipping media due to file size limits (likely too large to send via URL): %v", err)
-			return nil // Skip this media without failing the entire process
-		}
-		// For other errors, return them
-		return fmt.Errorf("couldn't send the %s media, %w", mediaToSend.MediaType(), err)
+	if _, err := m.bot.Send(m.msg.Chat, mediaToSend); err != nil {
+		return fmt.Errorf("couldn't send the %s photo, %w", mediaToSend.MediaType(), err)
 	}
 
 	logging.Debugf("Sent single %s with short code [%v]", mediaToSend.MediaType(), media.ShortCode)
@@ -70,38 +63,23 @@ func (m *MediaSender) sendNestedMedia(media *domain.Media) error {
 	const albumLimit = 10
 	var album telebot.Album
 
+	// Break down the media items into batches of up to 10
 	for i := 0; i < len(media.Items); i += albumLimit {
+		// Get the next batch of 10 (or fewer) media items
 		end := i + albumLimit
 		if end > len(media.Items) {
 			end = len(media.Items)
 		}
 
+		// Prepare the current batch
 		album = nil
 		for _, mediaItem := range media.Items[i:end] {
-			mediaToSend := convertMediaItemToInputtable(mediaItem)
-
-			// Attempt to send each item individually
-			_, err := m.bot.Send(m.msg.Chat, mediaToSend)
-			if err != nil {
-				// Handle specific error for large files
-				if err.Error() == "telegram: Bad Request: wrong file identifier/HTTP URL specified" {
-					logging.Warnf("Skipping media item due to file size limits (likely too large to send via URL): %v", err)
-					continue // Skip this item and move to the next
-				}
-				// For other errors, return them
-				return fmt.Errorf("couldn't send the nested media item, %w", err)
-			}
-
-			album = append(album, mediaToSend)
+			album = append(album, convertMediaItemToInputtable(mediaItem))
 		}
 
-		// If the entire album is empty (because all items were skipped), continue to the next batch
-		if len(album) == 0 {
-			continue
-		}
-
-		// Send the batch (album) of media items
-		if _, err := m.bot.SendAlbum(m.msg.Chat, album); err != nil {
+		// Send the album for the current batch
+		_, err := m.bot.SendAlbum(m.msg.Chat, album)
+		if err != nil {
 			return fmt.Errorf("couldn't send the nested media, %w", err)
 		}
 	}
