@@ -61,7 +61,7 @@ func (x *Controller) OnText(c telebot.Context) error {
 	}
 
 	// If the user is not a member or has restricted access
-	if member.Role != telebot.ChatMemberMember && member.Role != telebot.ChatMemberAdministrator {
+	if member.Role != telebot.ChatMember.Member && member.Role != telebot.ChatMember.Administrator {
 		return x.promptSubscription(c)
 	}
 
