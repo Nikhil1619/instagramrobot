@@ -33,31 +33,35 @@ func (*Controller) OnStart(c telebot.Context) error {
 		return nil
 	}
 
-	if err := c.Reply("Hello! I'm instagram keeper, post some instagram public post/reels to me."); err != nil {
+	if err := c.Reply("Hello! I'm Instagram keeper. Please send me some Instagram public post/reels."); err != nil {
 		return fmt.Errorf("couldn't send the start command response: %w", err)
 	}
 
 	return nil
 }
 
-// extractLinksFromString lets you to extract HTTP links from a string
+// extractLinksFromString extracts HTTP links from a string
 func extractLinksFromString(input string) []string {
 	regex := `(http|ftp|https)://([\w_-]+(?:(?:\.[\w_-]+)+))([\w.,@?^=%&:/~+#-]*[\w@?^=%&/~+#-])?`
 	r := regexp.MustCompile(regex)
 	return r.FindAllString(input, -1)
 }
 
-// Handler is the entry point for the incoming update
+// OnText handles incoming text messages
 func (x *Controller) OnText(c telebot.Context) error {
+	// Create a Recipient for the required channel
+	channel := &telebot.Chat{UserName: "Nexiuo"} // Set the username of the channel
+	user := c.Sender() // This is the user sending the message
+
 	// Check if the user is a member of the required channel
-	member, err := c.Bot().ChatMemberOf(requiredChannelID, c.Sender())
+	member, err := c.Bot().ChatMemberOf(channel, user)
 	if err != nil {
 		logging.Error(err)
-		return x.replyError(c, "Error checking subscription status, please try again later.")
+		return x.replyError(c, "Error checking subscription status. Please try again later.")
 	}
 
-	// If user is not subscribed
-	if member.Role == telebot.NoRole {
+	// If the user is not a member or has restricted access
+	if member.Role != telebot.ChatMemberMember && member.Role != telebot.ChatMemberAdministrator {
 		return x.promptSubscription(c)
 	}
 
@@ -69,8 +73,8 @@ func (x *Controller) OnText(c telebot.Context) error {
 			return nil
 		}
 
-		logging.Error("Invalid command,\nPlease send the Instagram post link.")
-		return x.replyError(c, "Invalid command,\nPlease send the Instagram post link.")
+		logging.Error("Invalid command: Please send the Instagram post link.")
+		return x.replyError(c, "Invalid command: Please send the Instagram post link.")
 	}
 
 	if err := x.processLinks(links, c.Message()); err != nil {
@@ -95,8 +99,7 @@ func (*Controller) promptSubscription(c telebot.Context) error {
 	return nil
 }
 
-// Gets list of links from user message text
-// and processes each one of them one by one.
+// processLinks processes each link sent by the user
 func (x *Controller) processLinks(links []string, m *telebot.Message) error {
 	linkProcessor := providers.NewLinkProcessor(providers.NewLinkProcessorRequest{
 		InstagramFetcher: instagram.NewInstagramFetcher(),
@@ -118,12 +121,11 @@ func (x *Controller) processLinks(links []string, m *telebot.Message) error {
 	return nil
 }
 
-// replyError will sends the error to specific Telegram chat
-// with a pre-defined structure
+// replyError sends the error message to the user
 func (*Controller) replyError(c telebot.Context, text string) error {
 	_, err := c.Bot().Reply(c.Message(), fmt.Sprintf("⚠️ *Oops, ERROR!*\n\n`%v`", text), telebot.ModeMarkdown)
 	if err != nil {
-		return fmt.Errorf("couldn't reply the Error, chat_id: %d, err: %w", c.Chat().ID, err)
+		return fmt.Errorf("couldn't reply the error, chat_id: %d, err: %w", c.Chat().ID, err)
 	}
 
 	return nil
