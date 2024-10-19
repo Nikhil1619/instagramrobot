@@ -58,16 +58,30 @@ func (m *MediaSender) sendSingleMedia(media *domain.Media) error {
 	return nil
 }
 
+// sendNestedMedia will handle the case where there are more than 10 media items by splitting them into batches of 10 or fewer
 func (m *MediaSender) sendNestedMedia(media *domain.Media) error {
+	const albumLimit = 10
 	var album telebot.Album
 
-	for _, media := range media.Items {
-		album = append(album, convertMediaItemToInputtable(media))
-	}
+	// Break down the media items into batches of up to 10
+	for i := 0; i < len(media.Items); i += albumLimit {
+		// Get the next batch of 10 (or fewer) media items
+		end := i + albumLimit
+		if end > len(media.Items) {
+			end = len(media.Items)
+		}
 
-	_, err := m.bot.SendAlbum(m.msg.Chat, album)
-	if err != nil {
-		return fmt.Errorf("couldn't send the nested media, %w", err)
+		// Prepare the current batch
+		album = nil
+		for _, mediaItem := range media.Items[i:end] {
+			album = append(album, convertMediaItemToInputtable(mediaItem))
+		}
+
+		// Send the album for the current batch
+		_, err := m.bot.SendAlbum(m.msg.Chat, album)
+		if err != nil {
+			return fmt.Errorf("couldn't send the nested media, %w", err)
+		}
 	}
 
 	return nil
