@@ -60,7 +60,7 @@ func (x *Controller) OnText(c telebot.Context) error {
 
 	// Send proper error if text has no link inside
 	if len(links) == 0 {
-		logging.Error("Invalid command,\nPlease send the Instagram post link.")
+		//logging.Error("Invalid command,\nPlease send the Instagram post link.")
 		return nil // Ignore
 		// return x.replyError(c, "Invalid command,\nPlease send the Instagram post link.")
 	}
