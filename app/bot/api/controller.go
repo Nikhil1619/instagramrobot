@@ -18,17 +18,18 @@ type Controller struct {
 	bot *telebot.Bot // Bot instance
 }
 
-// Channel ID to check if the user is subscribed
-const requiredChannelID = "@Nexiuo"
+// Configuration for the bot
+type Config struct {
+	RequiredChannelID int64
+}
 
 // NewController creates a new Controller instance.
-func NewController(b *telebot.Bot) *Controller {
+func NewController(b *telebot.Bot, config Config) *Controller {
 	return &Controller{bot: b}
 }
 
 // OnStart is the entry point for the incoming update
 func (*Controller) OnStart(c telebot.Context) error {
-	// Ignore channels and groups
 	if c.Chat().Type != telebot.ChatPrivate {
 		return nil
 	}
@@ -36,7 +37,6 @@ func (*Controller) OnStart(c telebot.Context) error {
 	if err := c.Reply("Hello! I'm Instagram keeper. Please send me some Instagram public post/reels."); err != nil {
 		return fmt.Errorf("couldn't send the start command response: %w", err)
 	}
-
 	return nil
 }
 
@@ -49,30 +49,20 @@ func extractLinksFromString(input string) []string {
 
 // OnText handles incoming text messages
 func (x *Controller) OnText(c telebot.Context) error {
-	// Assuming the channel's ID is known (you can find it in Telegram)
-	const requiredChannelID int64 = -1001321487892 // Replace with your channel ID
-	// Create a Recipient for the required channel using its ID
+	// Assuming the channel's ID is known (replace with your channel ID)
+	const requiredChannelID int64 = -1001321487892 
 	channel := &telebot.Chat{ID: requiredChannelID}
-	// Check if the user is a member of the required channel
-	member, err := c.Bot().ChatMemberOf(channel, c.Sender())
-	if err != nil {
-		logging.Error(err)
-		return x.replyError(c, "Error checking subscription status. Please try again later.")
-	}
 
-	// If the user is not a member or has restricted access
-	if member.Role != telebot.Member && member.Role != telebot.Administrator {
+	if isInChannel, err := x.isUserInChannel(c); !isInChannel {
 		return x.promptSubscription(c)
 	}
 
 	links := extractLinksFromString(c.Message().Text)
 
-	// Send proper error if text has no link inside
 	if len(links) == 0 {
 		if c.Chat().Type != telebot.ChatPrivate {
 			return nil
 		}
-
 		logging.Error("Invalid command: Please send the Instagram post link.")
 		return x.replyError(c, "Invalid command: Please send the Instagram post link.")
 	}
@@ -81,7 +71,6 @@ func (x *Controller) OnText(c telebot.Context) error {
 		if c.Chat().Type != telebot.ChatPrivate {
 			return nil
 		}
-
 		logging.Error(err)
 		return x.replyError(c, err.Error())
 	}
@@ -89,9 +78,19 @@ func (x *Controller) OnText(c telebot.Context) error {
 	return nil
 }
 
+// isUserInChannel checks if the user is in the required channel
+func (x *Controller) isUserInChannel(c telebot.Context) (bool, error) {
+	channel := &telebot.Chat{ID: requiredChannelID}
+	member, err := c.Bot().ChatMemberOf(channel, c.Sender())
+	if err != nil {
+		return false, fmt.Errorf("error checking subscription status: %w", err)
+	}
+	return member.Role == telebot.Member || member.Role == telebot.Administrator, nil
+}
+
 // promptSubscription prompts the user to subscribe to the required channel
 func (*Controller) promptSubscription(c telebot.Context) error {
-	message := fmt.Sprintf("🚨 To use this bot, you need to join our channel: %s", requiredChannelID)
+	message := fmt.Sprintf("🚨 To use this bot, you need to join our channel: @Nexiuo", requiredChannelID)
 	_, err := c.Bot().Send(c.Sender(), message)
 	if err != nil {
 		return fmt.Errorf("couldn't prompt for subscription: %w", err)
@@ -112,12 +111,10 @@ func (x *Controller) processLinks(links []string, m *telebot.Message) error {
 			logging.Errorf("can't process more than %c links per message", 3)
 			break
 		}
-
 		if err := linkProcessor.ProcessLink(link); err != nil {
 			return err
 		}
 	}
-
 	return nil
 }
 
@@ -127,6 +124,5 @@ func (*Controller) replyError(c telebot.Context, text string) error {
 	if err != nil {
 		return fmt.Errorf("couldn't reply the error, chat_id: %d, err: %w", c.Chat().ID, err)
 	}
-
 	return nil
 }
