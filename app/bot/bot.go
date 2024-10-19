@@ -9,7 +9,6 @@ import (
 	"gopkg.in/telebot.v3"
 
 	"github.com/omegaatt36/instagramrobot/app/bot/api"
-	"github.com/omegaatt36/instagramrobot/app/bot/config"
 	"github.com/omegaatt36/instagramrobot/logging"
 )
 
