@@ -14,7 +14,7 @@ import (
 )
 
 // Replace with your actual group chat ID
-const AllowedGroupID = int64(-1002315819064) // Replace with the actual group chat ID
+const AllowedGroupID = int64(-1001574965898) // Replace with the actual group chat ID
 
 // Controller is the main controller for the bot.
 type Controller struct {
