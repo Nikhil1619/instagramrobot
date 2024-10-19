@@ -18,13 +18,8 @@ type Controller struct {
 	bot *telebot.Bot // Bot instance
 }
 
-// Configuration for the bot
-type Config struct {
-	RequiredChannelID int64
-}
-
 // NewController creates a new Controller instance.
-func NewController(b *telebot.Bot, config Config) *Controller {
+func NewController(b *telebot.Bot) *Controller {
 	return &Controller{bot: b}
 }
 
