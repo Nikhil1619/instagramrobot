@@ -18,6 +18,9 @@ type Controller struct {
 	bot *telebot.Bot // Bot instance
 }
 
+// Channel ID to check if the user is subscribed
+const requiredChannelID = "@Nexiuo"
+
 // NewController creates a new Controller instance.
 func NewController(b *telebot.Bot) *Controller {
 	return &Controller{bot: b}
@@ -46,6 +49,18 @@ func extractLinksFromString(input string) []string {
 
 // Handler is the entry point for the incoming update
 func (x *Controller) OnText(c telebot.Context) error {
+	// Check if the user is a member of the required channel
+	member, err := c.Bot().ChatMemberOf(requiredChannelID, c.Sender())
+	if err != nil {
+		logging.Error(err)
+		return x.replyError(c, "Error checking subscription status, please try again later.")
+	}
+
+	// If user is not subscribed
+	if member.Role == telebot.NoRole {
+		return x.promptSubscription(c)
+	}
+
 	links := extractLinksFromString(c.Message().Text)
 
 	// Send proper error if text has no link inside
@@ -67,6 +82,16 @@ func (x *Controller) OnText(c telebot.Context) error {
 		return x.replyError(c, err.Error())
 	}
 
+	return nil
+}
+
+// promptSubscription prompts the user to subscribe to the required channel
+func (*Controller) promptSubscription(c telebot.Context) error {
+	message := fmt.Sprintf("🚨 To use this bot, you need to join our channel: %s", requiredChannelID)
+	_, err := c.Bot().Send(c.Sender(), message)
+	if err != nil {
+		return fmt.Errorf("couldn't prompt for subscription: %w", err)
+	}
 	return nil
 }
 
@@ -102,5 +127,4 @@ func (*Controller) replyError(c telebot.Context, text string) error {
 	}
 
 	return nil
-
 }
