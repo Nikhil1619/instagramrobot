@@ -23,6 +23,9 @@ RUN go build -o build/insta-fetcher-bot cmd/bot/main.go
 # Build the web binary
 RUN go build -o build/insta-fetcher-web cmd/web/main.go
 
+# Create start.sh script in the build stage and ensure it is executable
+RUN echo '#!/bin/sh\n./web &\n./bot' > start.sh && chmod +x start.sh
+
 # Stage 2: Production stage
 FROM gcr.io/distroless/static-debian12 as prod
 
@@ -33,11 +36,8 @@ WORKDIR /home/app/
 COPY --from=build /go/src/app/build/insta-fetcher-bot ./bot
 COPY --from=build /go/src/app/build/insta-fetcher-web ./web
 
-# Copy a start script
-COPY start.sh ./start.sh
-
-# Ensure the script is executable
-RUN chmod +x ./start.sh
+# Copy the already executable start script
+COPY --from=build /go/src/app/start.sh ./start.sh
 
 # Run the start script
 CMD ["./start.sh"]
