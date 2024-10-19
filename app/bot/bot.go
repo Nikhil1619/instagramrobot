@@ -21,7 +21,7 @@ func Register(botToken string) error {
 	bot, err := telebot.NewBot(telebot.Settings{
 		Token:   botToken,
 		Poller:  &telebot.LongPoller{Timeout: 10 * time.Second},
-		Verbose: !config.IsProduction(),
+		Verbose: false,
 	})
 	if err != nil {
 		logging.Error("Couldn't create the Telegram bot instance")
