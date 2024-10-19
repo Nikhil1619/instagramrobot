@@ -32,3 +32,10 @@ tasks:
   live-web:
     cmds:
       - air --build.cmd "go build -o build/web cmd/web/main.go" --build.bin "./build/web"
+  live-bot:
+    cmds:
+      - air --build.cmd "go build -o build/bot cmd/bot/main.go" --build.bin "./build/bot"
+  live-all:
+    cmds:
+      - task: live-web &
+      - task: live-bot
