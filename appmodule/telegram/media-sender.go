@@ -15,7 +15,7 @@ type MediaSender struct {
 	msg *telebot.Message
 }
 
-// NewMediaSender creates a new MediaSenderImpl instance
+// NewMediaSender creates a new MediaSender instance
 func NewMediaSender(bot *telebot.Bot, msg *telebot.Message) domain.MediaSender {
 	return &MediaSender{
 		bot: bot,
@@ -45,29 +45,25 @@ func (m *MediaSender) Send(media *domain.Media) error {
 }
 
 func (m *MediaSender) sendSingleMedia(media *domain.Media) error {
-    if media.URL == "" {
-        return nil
-    }
+	if media.URL == "" {
+		return nil
+	}
 
-    mediaToSend := convertMediaToInputtable(media)
+	mediaToSend := convertMediaToInputtable(media)
 
-    // First, attempt to send the media normally (e.g., as a photo or video)
-    if _, err := m.bot.Send(m.msg.Chat, mediaToSend); err != nil {
-        logging.Errorf("couldn't send the %s media normally, attempting to send as document: %v", mediaToSend.MediaType(), err)
-    } else {
-        logging.Debugf("Sent single %s with short code [%v]", mediaToSend.MediaType(), media.ShortCode)
-    }
+	// Step 1: Attempt to send the media (photo/video)
+	if _, err := m.bot.Send(m.msg.Chat, mediaToSend); err != nil {
+		logging.Errorf("couldn't send the %s media normally: %v", mediaToSend.MediaType(), err)
+	}
 
-    // Always attempt to send as a document, regardless of whether media was sent successfully or not
-    if err := m.sendAsDocument(media); err != nil {
-        return fmt.Errorf("failed to send as document: %w", err)
-    }
+	// Step 2: Always attempt to send as a document
+	if err := m.sendAsDocument(media); err != nil {
+		return fmt.Errorf("failed to send as document: %w", err)
+	}
 
-    return nil // Successfully sent both as media and document
+	return nil // Successfully sent both as media (if applicable) and document
 }
 
-
-// sendNestedMedia will handle the case where there are more than 10 media items by splitting them into batches of 10 or fewer
 func (m *MediaSender) sendNestedMedia(media *domain.Media) error {
 	const albumLimit = 10
 	var album telebot.Album
@@ -86,7 +82,7 @@ func (m *MediaSender) sendNestedMedia(media *domain.Media) error {
 			album = append(album, convertMediaItemToInputtable(mediaItem))
 		}
 
-		// Try sending the album for the current batch
+		// Step 1: Try sending the album for the current batch
 		if _, err := m.bot.SendAlbum(m.msg.Chat, album); err != nil {
 			logging.Errorf("couldn't send the nested media album, attempting to send as document: %v", err)
 
