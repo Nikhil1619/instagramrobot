@@ -37,7 +37,8 @@ func (m *MediaSender) Send(media *domain.Media) error {
 	}
 
 	if err := fnSend(media); err != nil {
-		return fmt.Errorf("sending the media failed, %w", err)
+		// Return the error if both media and document sending fails
+		return fmt.Errorf("failed to send media: %w", err)
 	}
 
 	return m.SendCaption(media)
@@ -50,18 +51,17 @@ func (m *MediaSender) sendSingleMedia(media *domain.Media) error {
 
 	mediaToSend := convertMediaToInputtable(media)
 
-	// Send the media normally (e.g., as photo or video)
+	// Try sending media normally (e.g., as photo or video)
 	if _, err := m.bot.Send(m.msg.Chat, mediaToSend); err != nil {
-		return fmt.Errorf("couldn't send the %s media, %w", mediaToSend.MediaType(), err)
+		logging.Errorf("couldn't send the %s media, attempting to send as document: %v", mediaToSend.MediaType(), err)
+		// Attempt to send as a document if media send fails
+		if err := m.sendAsDocument(media); err != nil {
+			return fmt.Errorf("failed to send as document after media failed: %w", err)
+		}
+		return nil // Successfully sent as document
 	}
 
 	logging.Debugf("Sent single %s with short code [%v]", mediaToSend.MediaType(), media.ShortCode)
-
-	// Now, send the media as a document
-	if err := m.sendAsDocument(media); err != nil {
-		return fmt.Errorf("failed to send as document, %w", err)
-	}
-
 	return nil
 }
 
@@ -84,19 +84,18 @@ func (m *MediaSender) sendNestedMedia(media *domain.Media) error {
 			album = append(album, convertMediaItemToInputtable(mediaItem))
 		}
 
-		// Send the album for the current batch
-		_, err := m.bot.SendAlbum(m.msg.Chat, album)
-		if err != nil {
-			return fmt.Errorf("couldn't send the nested media, %w", err)
-		}
+		// Try sending the album for the current batch
+		if _, err := m.bot.SendAlbum(m.msg.Chat, album); err != nil {
+			logging.Errorf("couldn't send the nested media album, attempting to send as document: %v", err)
 
-		// Now, send each media item in the batch as a document
-		for _, mediaItem := range media.Items[i:end] {
-			if err := m.sendAsDocument(&domain.Media{
-				URL:      mediaItem.URL,
-				ShortCode: media.ShortCode, // Optional: Use same shortcode or generate new
-			}); err != nil {
-				return fmt.Errorf("failed to send nested media as document, %w", err)
+			// Attempt to send each media item as a document if album sending fails
+			for _, mediaItem := range media.Items[i:end] {
+				if err := m.sendAsDocument(&domain.Media{
+					URL:      mediaItem.URL,
+					ShortCode: media.ShortCode, // Optional: Use same shortcode or generate new
+				}); err != nil {
+					return fmt.Errorf("failed to send nested media as document, %w", err)
+				}
 			}
 		}
 	}
@@ -117,7 +116,6 @@ func (m *MediaSender) sendAsDocument(media *domain.Media) error {
 	}
 
 	logging.Debugf("Sent media as document with short code [%v]", media.ShortCode)
-
 	return nil
 }
 
@@ -128,7 +126,7 @@ func (m *MediaSender) SendCaption(media *domain.Media) error {
 		return nil
 	}
 
-	// shrink media caption below 4096 characters
+	// Shrink media caption below 4096 characters
 	if len(media.Caption) > 4096 {
 		media.Caption = media.Caption[:4096]
 	}
