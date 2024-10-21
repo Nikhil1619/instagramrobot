@@ -42,6 +42,7 @@ func (m *MediaSender) Send(media *domain.Media) error {
 		return fmt.Errorf("failed to send media: %w", err)
 	}
 
+	m.SendCaption(media)
 	// Send the custom thank you message after successfully sending media
 	return m.sendCustomMessage("Share @Nexiuo with your friends") // Customize your message here
 }
