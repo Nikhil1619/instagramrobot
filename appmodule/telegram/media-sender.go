@@ -36,6 +36,7 @@ func (m *MediaSender) Send(media *domain.Media) error {
 		fnSend = m.sendNestedMedia
 	}
 
+	// Execute the media send function
 	if err := fnSend(media); err != nil {
 		// Return the error if both media and document sending fails
 		return fmt.Errorf("failed to send media: %w", err)
@@ -51,17 +52,17 @@ func (m *MediaSender) sendSingleMedia(media *domain.Media) error {
 
 	mediaToSend := convertMediaToInputtable(media)
 
-	// Step 1: Attempt to reply with the media (photo/video)
-	if _, err := m.bot.Reply(m.msg, mediaToSend); err != nil {
+	// Step 1: Attempt to send the media (photo/video)
+	if _, err := m.bot.Send(m.msg.Chat, mediaToSend); err != nil {
 		logging.Errorf("couldn't send the %s media normally: %v", mediaToSend.MediaType(), err)
+
+		// Step 2: Attempt to send as a document if media send fails
+		if err := m.sendAsDocument(media); err != nil {
+			return fmt.Errorf("failed to send as document: %w", err)
+		}
 	}
 
-	// Step 2: Always attempt to send as a document in reply
-	if err := m.sendAsDocument(media); err != nil {
-		return fmt.Errorf("failed to send as document: %w", err)
-	}
-
-	return nil // Successfully sent both as media (if applicable) and document
+	return nil // Successfully sent media (if applicable)
 }
 
 func (m *MediaSender) sendNestedMedia(media *domain.Media) error {
@@ -82,11 +83,11 @@ func (m *MediaSender) sendNestedMedia(media *domain.Media) error {
 			album = append(album, convertMediaItemToInputtable(mediaItem))
 		}
 
-		// Step 1: Try replying with the album for the current batch
-		if _, err := m.bot.Reply(m.msg, album); err != nil {
+		// Step 1: Try sending the album for the current batch
+		if _, err := m.bot.SendAlbum(m.msg.Chat, album); err != nil {
 			logging.Errorf("couldn't send the nested media album, attempting to send as document: %v", err)
 
-			// Attempt to send each media item as a document if album replying fails
+			// Attempt to send each media item as a document if album sending fails
 			for _, mediaItem := range media.Items[i:end] {
 				if err := m.sendAsDocument(&domain.Media{
 					URL:      mediaItem.URL,
@@ -101,14 +102,14 @@ func (m *MediaSender) sendNestedMedia(media *domain.Media) error {
 	return nil
 }
 
-// sendAsDocument sends the media as a document in reply to the chat
+// sendAsDocument sends the media as a document to the chat
 func (m *MediaSender) sendAsDocument(media *domain.Media) error {
 	document := &telebot.Document{
 		File:     telebot.FromURL(media.URL),
 		FileName: fmt.Sprintf("%s.%s", media.ShortCode, getFileExtension(media.URL)),
 	}
 
-	_, err := m.bot.Reply(m.msg, document) // Use Reply instead of Send
+	_, err := m.bot.Send(m.msg.Chat, document)
 	if err != nil {
 		return fmt.Errorf("couldn't send the document, %w", err)
 	}
