@@ -2,6 +2,7 @@ package telegram
 
 import (
 	"fmt"
+	"regexp"
 
 	"gopkg.in/telebot.v3"
 
@@ -36,7 +37,7 @@ func (m *MediaSender) Send(media *domain.Media) error {
 	}
 
 	if err := fnSend(media); err != nil {
-		return fmt.Errorf("sent the media failed, %w", err)
+		return fmt.Errorf("sending the media failed, %w", err)
 	}
 
 	return m.SendCaption(media)
@@ -49,11 +50,17 @@ func (m *MediaSender) sendSingleMedia(media *domain.Media) error {
 
 	mediaToSend := convertMediaToInputtable(media)
 
+	// Send the media normally (e.g., as photo or video)
 	if _, err := m.bot.Send(m.msg.Chat, mediaToSend); err != nil {
-		return fmt.Errorf("couldn't send the %s photo, %w", mediaToSend.MediaType(), err)
+		return fmt.Errorf("couldn't send the %s media, %w", mediaToSend.MediaType(), err)
 	}
 
 	logging.Debugf("Sent single %s with short code [%v]", mediaToSend.MediaType(), media.ShortCode)
+
+	// Now, send the media as a document
+	if err := m.sendAsDocument(media); err != nil {
+		return fmt.Errorf("failed to send as document, %w", err)
+	}
 
 	return nil
 }
@@ -82,7 +89,34 @@ func (m *MediaSender) sendNestedMedia(media *domain.Media) error {
 		if err != nil {
 			return fmt.Errorf("couldn't send the nested media, %w", err)
 		}
+
+		// Now, send each media item in the batch as a document
+		for _, mediaItem := range media.Items[i:end] {
+			if err := m.sendAsDocument(&domain.Media{
+				URL:      mediaItem.URL,
+				ShortCode: media.ShortCode, // Optional: Use same shortcode or generate new
+			}); err != nil {
+				return fmt.Errorf("failed to send nested media as document, %w", err)
+			}
+		}
 	}
+
+	return nil
+}
+
+// sendAsDocument sends the media as a document to the chat
+func (m *MediaSender) sendAsDocument(media *domain.Media) error {
+	document := &telebot.Document{
+		File:     telebot.FromURL(media.URL),
+		FileName: fmt.Sprintf("%s.%s", media.ShortCode, getFileExtension(media.URL)),
+	}
+
+	_, err := m.bot.Send(m.msg.Chat, document)
+	if err != nil {
+		return fmt.Errorf("couldn't send the document, %w", err)
+	}
+
+	logging.Debugf("Sent media as document with short code [%v]", media.ShortCode)
 
 	return nil
 }
@@ -101,4 +135,15 @@ func (m *MediaSender) SendCaption(media *domain.Media) error {
 
 	_, err := m.bot.Reply(m.msg, media.Caption)
 	return err
+}
+
+// getFileExtension extracts the file extension from a URL
+func getFileExtension(url string) string {
+	// A simple regex to get the file extension
+	re := regexp.MustCompile(`\.(\w+)$`)
+	match := re.FindStringSubmatch(url)
+	if len(match) > 1 {
+		return match[1]
+	}
+	return "file" // Default extension if we can't determine one
 }
