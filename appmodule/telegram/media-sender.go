@@ -45,25 +45,27 @@ func (m *MediaSender) Send(media *domain.Media) error {
 }
 
 func (m *MediaSender) sendSingleMedia(media *domain.Media) error {
-	if media.URL == "" {
-		return nil
-	}
+    if media.URL == "" {
+        return nil
+    }
 
-	mediaToSend := convertMediaToInputtable(media)
+    mediaToSend := convertMediaToInputtable(media)
 
-	// Try sending media normally (e.g., as photo or video)
-	if _, err := m.bot.Send(m.msg.Chat, mediaToSend); err != nil {
-		logging.Errorf("couldn't send the %s media, attempting to send as document: %v", mediaToSend.MediaType(), err)
-		// Attempt to send as a document if media send fails
-		if err := m.sendAsDocument(media); err != nil {
-			return fmt.Errorf("failed to send as document after media failed: %w", err)
-		}
-		return nil // Successfully sent as document
-	}
+    // First, attempt to send the media normally (e.g., as a photo or video)
+    if _, err := m.bot.Send(m.msg.Chat, mediaToSend); err != nil {
+        logging.Errorf("couldn't send the %s media normally, attempting to send as document: %v", mediaToSend.MediaType(), err)
+    } else {
+        logging.Debugf("Sent single %s with short code [%v]", mediaToSend.MediaType(), media.ShortCode)
+    }
 
-	logging.Debugf("Sent single %s with short code [%v]", mediaToSend.MediaType(), media.ShortCode)
-	return nil
+    // Always attempt to send as a document, regardless of whether media was sent successfully or not
+    if err := m.sendAsDocument(media); err != nil {
+        return fmt.Errorf("failed to send as document: %w", err)
+    }
+
+    return nil // Successfully sent both as media and document
 }
+
 
 // sendNestedMedia will handle the case where there are more than 10 media items by splitting them into batches of 10 or fewer
 func (m *MediaSender) sendNestedMedia(media *domain.Media) error {
