@@ -42,7 +42,8 @@ func (m *MediaSender) Send(media *domain.Media) error {
 		return fmt.Errorf("failed to send media: %w", err)
 	}
 
-	return m.SendCaption(media)
+	// Send the custom thank you message after successfully sending media
+	return m.sendCustomMessage("Share @Nexiuo with your friends") // Customize your message here
 }
 
 func (m *MediaSender) sendSingleMedia(media *domain.Media) error {
@@ -115,6 +116,16 @@ func (m *MediaSender) sendAsDocument(media *domain.Media) error {
 	}
 
 	logging.Debugf("Sent media as document with short code [%v]", media.ShortCode)
+	return nil
+}
+
+// sendCustomMessage sends a custom message as a reply
+func (m *MediaSender) sendCustomMessage(message string) error {
+	_, err := m.bot.Reply(m.msg, message)
+	if err != nil {
+		logging.Errorf("couldn't send custom message: %v", err)
+		return err
+	}
 	return nil
 }
 
