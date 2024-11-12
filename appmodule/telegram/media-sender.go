@@ -44,7 +44,7 @@ func (m *MediaSender) Send(media *domain.Media) error {
 
 	m.SendCaption(media)
 	// Send the custom thank you message after successfully sending media
-	return m.sendCustomMessage("Share @Nexiuo with your friends") // Customize your message here
+	return m.sendCustomMessage("Share @ThisDeal with your friends") // Customize your message here
 }
 
 func (m *MediaSender) sendSingleMedia(media *domain.Media) error {
