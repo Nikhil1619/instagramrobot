@@ -45,7 +45,7 @@ func extractLinksFromString(input string) []string {
 // OnText handles incoming text messages
 func (x *Controller) OnText(c telebot.Context) error {
 	// Get the required channel ID from the config
-	requiredChannelID := int64(-1001321487892) // Replace with your channel ID
+	requiredChannelID := int64(-1002108741045) // Replace with your channel ID
 
 	// Check if the user is in the required channel
 	isInChannel, err := x.isUserInChannel(c, requiredChannelID)
@@ -91,7 +91,7 @@ func (x *Controller) isUserInChannel(c telebot.Context, requiredChannelID int64)
 
 // promptSubscription prompts the user to subscribe to the required channel
 func (*Controller) promptSubscription(c telebot.Context) error {
-	message := "🚨 To use this bot, you need to join our channel: @Nexiuo" // Channel username
+	message := "🚨 To use this bot, you need to join our channel: @ThisDeal" // Channel username
 	_, err := c.Bot().Send(c.Sender(), message)
 	if err != nil {
 		return fmt.Errorf("couldn't prompt for subscription: %w", err)
