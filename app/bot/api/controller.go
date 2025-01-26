@@ -86,7 +86,7 @@ func (x *Controller) isUserInChannel(c telebot.Context, requiredChannelID int64)
 	if err != nil {
 		return false, fmt.Errorf("error checking subscription status: %w", err)
 	}
-	return member.Role == telebot.Member || member.Role == telebot.Administrator, nil
+	return member.Role == telebot.Member || member.Role == telebot.Administrator || member.Role == telebot.Owner, nil
 }
 
 // promptSubscription prompts the user to subscribe to the required channel
