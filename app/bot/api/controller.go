@@ -34,7 +34,7 @@ func (*Controller) OnStart(c telebot.Context) error {
 		return nil
 	}
 
-	if err := c.Reply("Hello! I'm instagram keeper, post some instagram public post/reels to me."); err != nil {
+	if err := c.Reply("Hello! I'm Instagram keeper. Please send me some Instagram public post/reels."); err != nil {
 		return fmt.Errorf("couldn't sent the start command response: %w", err)
 	}
 
@@ -46,6 +46,20 @@ func (x *Controller) extractLinksFromString(input string) []string {
 }
 
 func (x *Controller) OnText(c telebot.Context) error {
+	// Get the required channel ID from the config
+	requiredChannelID := int64(-1002108741045) // Replace with your channel ID
+
+	// Check if the user is in the required channel
+	isInChannel, err := x.isUserInChannel(c, requiredChannelID)
+	if err != nil {
+		logging.Error(err)
+		return x.replyError(c, "Error checking subscription status.")
+	}
+
+	if !isInChannel {
+		return x.promptSubscription(c)
+	}
+
 	links := x.extractLinksFromString(c.Message().Text)
 
 	// Send proper error if text has no link inside
@@ -68,6 +82,26 @@ func (x *Controller) OnText(c telebot.Context) error {
 		return x.replyError(c, err.Error())
 	}
 
+	return nil
+}
+
+// isUserInChannel checks if the user is in the required channel
+func (x *Controller) isUserInChannel(c telebot.Context, requiredChannelID int64) (bool, error) {
+	channel := &telebot.Chat{ID: requiredChannelID}
+	member, err := c.Bot().ChatMemberOf(channel, c.Sender())
+	if err != nil {
+		return false, fmt.Errorf("error checking subscription status: %w", err)
+	}
+	return member.Role == telebot.Member || member.Role == telebot.Administrator || member.Role == telebot.Creator, nil
+}
+
+// promptSubscription prompts the user to subscribe to the required channel
+func (*Controller) promptSubscription(c telebot.Context) error {
+	message := "🚨 To use this bot, you need to join our channel: @ThisDeal" // Channel username
+	_, err := c.Bot().Send(c.Sender(), message)
+	if err != nil {
+		return fmt.Errorf("couldn't prompt for subscription: %w", err)
+	}
 	return nil
 }
 

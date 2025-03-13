@@ -2,24 +2,25 @@ package bot
 
 import (
 	"context"
+	"fmt"
+	"net/http"
 	"time"
 
 	"gopkg.in/telebot.v4"
 
 	"github.com/omegaatt36/instagramrobot/app/bot/api"
-	"github.com/omegaatt36/instagramrobot/app/bot/config"
 	"github.com/omegaatt36/instagramrobot/logging"
 )
 
 var b *telebot.Bot
 
 // Register will generate a fresh Telegram bot instance
-// and registers it's handler logics
+// and registers its handler logics
 func Register(botToken string) error {
 	bot, err := telebot.NewBot(telebot.Settings{
 		Token:   botToken,
 		Poller:  &telebot.LongPoller{Timeout: 10 * time.Second},
-		Verbose: !config.IsProduction(),
+		Verbose: false,
 	})
 	if err != nil {
 		logging.Error("Couldn't create the Telegram bot instance")
@@ -32,6 +33,9 @@ func Register(botToken string) error {
 		b.Me.ID, b.Me.Username, b.Me.FirstName)
 
 	registerCommands()
+
+	// Start the HTTP server in a goroutine
+	go startHTTPServer()
 
 	// TODO: set bot commands
 
@@ -62,4 +66,21 @@ func Start(ctx context.Context) <-chan struct{} {
 	}()
 
 	return closeChain
+}
+
+// Function to start the HTTP server
+func startHTTPServer() {
+	http.HandleFunc("/", helloHandler) // Set up the hello handler
+
+	port := "8080" // Change this if you want to use a different port
+	logging.Infof("Starting HTTP server on port %s", port)
+	if err := http.ListenAndServe(":"+port, nil); err != nil {
+		logging.Fatalf("Failed to start HTTP server: %v", err)
+	}
+}
+
+// Handler for the root path that serves "Hello, World!"
+func helloHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/plain")
+	fmt.Fprintln(w, "Hello, World!")
 }
