@@ -8,93 +8,102 @@ import (
 	"github.com/omegaatt36/instagramrobot/domain"
 )
 
-// GraphQL data structures for Instagram API responses
-
-// GraphQLResponse represents the main GraphQL response
-type GraphQLResponse struct {
-	Data   *GraphQLData `json:"data"`
-	Status string       `json:"status"`
+// GetGQLMediaList fetches media using GraphQL API and converts to domain media
+func GetGQLMediaList(client *http.Client, shortcode string) ([]*domain.Media, error) {
+	graphData, err := GetGQLData(client, shortcode)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get graph data: %w", err)
+	}
+	return ParseGQLMedia(graphData.ShortcodeMedia, shortcode)
 }
 
-// GraphQLData contains the actual media data
-type GraphQLData struct {
-	ShortcodeMedia *Media `json:"shortcode_media"`
+// GetEmbedMediaList fetches media from embed page and parses it
+func GetEmbedMediaList(client *http.Client, shortcode string) ([]*domain.Media, error) {
+	embedURL := fmt.Sprintf("https://www.instagram.com/p/%s/embed/captioned", shortcode)
+	
+	resp, err := FetchPage(client, http.MethodGet, embedURL, nil, webHeaders)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("failed to get embed page: %s", resp.Status)
+	}
+	
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+	
+	graphData, err := ParseEmbedGQL(body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse embed page: %w", err)
+	}
+	
+	return ParseGQLMedia(graphData, shortcode)
 }
 
-// Media represents Instagram media data
-type Media struct {
-	ID                    string                `json:"id"`
-	Shortcode             string                `json:"shortcode"`
-	Typename              string                `json:"__typename"`
-	DisplayURL            string                `json:"display_url"`
-	VideoURL              string                `json:"video_url"`
-	IsVideo               bool                  `json:"is_video"`
-	EdgeMediaToCaption    *EdgeMediaToCaption   `json:"edge_media_to_caption"`
-	EdgeSidecarToChildren *EdgeSidecarToChildren `json:"edge_sidecar_to_children"`
+// GetIGramMediaList fetches media using third-party service
+func GetIGramMediaList(client *http.Client, shortcode string) ([]*domain.Media, error) {
+	postURL := fmt.Sprintf("https://www.instagram.com/p/%s/", shortcode)
+	details, err := GetFromIGram(client, postURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get post: %w", err)
+	}
+	
+	mediaList := make([]*domain.Media, 0, len(details.Items))
+	for _, item := range details.Items {
+		if len(item.URL) == 0 {
+			continue
+		}
+		
+		urlObj := item.URL[0]
+		contentURL, err := GetCDNURL(urlObj.URL)
+		if err != nil {
+			return nil, err
+		}
+		
+		media := &domain.Media{
+			ShortCode: shortcode,
+			URL:       contentURL,
+			IsVideo:   urlObj.Ext == "mp4",
+			Source:    domain.SourceInstagram,
+		}
+		
+		mediaList = append(mediaList, media)
+	}
+
+	return mediaList, nil
 }
 
-// EdgeMediaToCaption contains caption data
-type EdgeMediaToCaption struct {
-	Edges []CaptionEdge `json:"edges"`
-}
+// GetFromIGram makes a request to the third-party IGram service
+func GetFromIGram(client *http.Client, contentURL string) (*IGramResponse, error) {
+	apiURL := fmt.Sprintf("https://%s/api/convert", igramHostname)
+	payload, err := BuildIGramPayload(contentURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build signed payload: %w", err)
+	}
+	
+	resp, err := FetchPage(client, http.MethodPost, apiURL, payload, igramHeaders)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send request: %w", err)
+	}
+	defer resp.Body.Close()
 
-// CaptionEdge represents a caption edge
-type CaptionEdge struct {
-	Node CaptionNode `json:"node"`
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("failed to get response: %s", resp.Status)
+	}
+	
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+	
+	response, err := ParseIGramResponse(body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+	
+	return response, nil
 }
-
-// CaptionNode contains the actual caption text
-type CaptionNode struct {
-	Text string `json:"text"`
-}
-
-// EdgeSidecarToChildren contains carousel/sidecar media
-type EdgeSidecarToChildren struct {
-	Edges []SidecarEdge `json:"edges"`
-}
-
-// SidecarEdge represents a sidecar edge
-type SidecarEdge struct {
-	Node SidecarNode `json:"node"`
-}
-
-// SidecarNode contains individual media in carousel
-type SidecarNode struct {
-	ID         string `json:"id"`
-	Typename   string `json:"__typename"`
-	DisplayURL string `json:"display_url"`
-	VideoURL   string `json:"video_url"`
-	IsVideo    bool   `json:"is_video"`
-}
-
-// ContextJSON represents the context JSON from embed pages
-type ContextJSON struct {
-	GqlData *GraphQLData `json:"gql_data"`
-}
-
-// IGramResponse represents response from third-party service
-type IGramResponse struct {
-	Items []*IGramMedia `json:"items"`
-}
-
-// IGramMedia represents media item from third-party service
-type IGramMedia struct {
-	URL   []IGramURL `json:"url"`
-	Type  string     `json:"type"`
-	Title string     `json:"title"`
-}
-
-// IGramURL represents URL data from IGram service
-type IGramURL struct {
-	URL string `json:"url"`
-	Ext string `json:"ext"`
-}
-
-// Error definitions for GraphQL operations
-var (
-	ErrGQLJSONNotFound     = fmt.Errorf("GraphQL JSON not found in response")
-	ErrGQLContextNotFound  = fmt.Errorf("GraphQL context not found")
-	ErrGQLContextMismatch  = fmt.Errorf("GraphQL context type mismatch")
-	ErrGQLNilResponse      = fmt.Errorf("GraphQL response data is nil")
-	ErrGQLNilMedia         = fmt.Errorf("GraphQL media data is nil")
-)
