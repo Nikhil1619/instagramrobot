@@ -36,14 +36,19 @@ func (s *Server) parse(w http.ResponseWriter, r *http.Request) {
 	shortCode, err := instagram.ExtractShortCodeFromLink(url)
 	if err != nil {
 		logging.ErrorCtx(r.Context(), err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, "Invalid Instagram URL. Please check the link and try again.", http.StatusBadRequest)
 		return
 	}
 
 	domainMedia, err := instagram.NewInstagramFetcher().GetPostWithCode(shortCode)
 	if err != nil {
 		logging.ErrorCtx(r.Context(), err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		// Provide more user-friendly error messages
+		errorMsg := "Failed to fetch Instagram post. The post might be private, deleted, or the link is incorrect."
+		if strings.Contains(err.Error(), "all extraction methods failed") {
+			errorMsg = "Unable to download this Instagram post. It may be private or from a restricted account."
+		}
+		http.Error(w, errorMsg, http.StatusInternalServerError)
 		return
 	}
 
@@ -53,7 +58,7 @@ func (s *Server) parse(w http.ResponseWriter, r *http.Request) {
 		m, err := encodeMediaToBase64(domainMedia.URL, domainMedia.IsVideo)
 		if err != nil {
 			logging.ErrorCtx(r.Context(), err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, "Failed to process media content. Please try again.", http.StatusInternalServerError)
 			return
 		}
 		medias = append(medias, m)
@@ -62,7 +67,7 @@ func (s *Server) parse(w http.ResponseWriter, r *http.Request) {
 			m, err := encodeMediaToBase64(item.URL, item.IsVideo)
 			if err != nil {
 				logging.ErrorCtx(r.Context(), err)
-				http.Error(w, err.Error(), http.StatusInternalServerError)
+				http.Error(w, "Failed to process media content. Please try again.", http.StatusInternalServerError)
 				return
 			}
 

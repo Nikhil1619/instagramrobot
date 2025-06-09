@@ -5,6 +5,64 @@ import (
 	"time"
 )
 
+// GraphQL Response structures
+type GraphQLResponse struct {
+	Data   *GraphQLData `json:"data"`
+	Status string       `json:"status"`
+}
+
+type GraphQLData struct {
+	ShortcodeMedia *Media `json:"xdt_shortcode_media"`
+}
+
+type ContextJSON struct {
+	Context *Context `json:"context"`
+	GqlData *GqlData `json:"gql_data"`
+}
+
+type GqlData struct {
+	ShortcodeMedia *Media `json:"shortcode_media"`
+}
+
+type EdgeMediaToCaption struct {
+	Edges []*Edges `json:"edges"`
+}
+
+type EdgeNode struct {
+	Node *Media `json:"node"`
+}
+
+type EdgeSidecarToChildren struct {
+	Edges []*EdgeNode `json:"edges"`
+}
+
+type Node struct {
+	Text string `json:"text"`
+}
+
+type Edges struct {
+	Node *Node `json:"node"`
+}
+
+// IGram Response structures
+type IGramResponse struct {
+	Items []*IGramMedia `json:"items"`
+}
+
+type IGramMedia struct {
+	URL       []*IGramMediaURL `json:"url"`
+	Thumb     string           `json:"thumb"`
+	Hosting   string           `json:"hosting"`
+	Timestamp int              `json:"timestamp"`
+}
+
+type IGramMediaURL struct {
+	URL  string `json:"url"`
+	Name string `json:"name"`
+	Type string `json:"type"`
+	Ext  string `json:"ext"`
+}
+
 // Dimensions of the media
 type Dimensions struct {
 	Height int `json:"height"` // Height of the media in pixels
@@ -74,6 +132,7 @@ type SliderItemNode struct {
 	Title          string `json:"title"`            // The video title
 	VideoURL       string `json:"video_url"`        // Direct URL to the Video
 	VideoViewCount uint64 `json:"video_view_count"` // The number of times Video has been viewed
+	Typename       string `json:"__typename"`       // GraphQL typename
 }
 
 // ExtractMediaURL will extract the Media URL automatically based on Media type (video or image)
@@ -115,7 +174,10 @@ type Media struct {
 	VideoURL       string `json:"video_url"`        // Direct URL to the Video
 	VideoViewCount uint64 `json:"video_view_count"` // The number of times Video has been viewed
 
-	SliderItems SliderItems `json:"edge_sidecar_to_children"` // Children of the Media
+	SliderItems           SliderItems           `json:"edge_sidecar_to_children"` // Children of the Media
+	Typename              string                `json:"__typename"`               // GraphQL typename
+	EdgeMediaToCaption    *EdgeMediaToCaption   `json:"edge_media_to_caption"`
+	EdgeSidecarToChildren *EdgeSidecarToChildren `json:"edge_sidecar_to_children"`
 }
 
 // EmbedResponse base
@@ -148,6 +210,30 @@ func (s EmbedResponse) ExtractMediaURL() string {
 		return s.Media.VideoURL
 	}
 	return s.Media.DisplayURL
+}
+
+type Posts struct {
+	Src    string `json:"src"`
+	Srcset string `json:"srcset"`
+}
+
+type Context struct {
+	AltText               string `json:"alt_text"`
+	Caption               string `json:"caption"`
+	CaptionTitleLinkified string `json:"caption_title_linkified"`
+	DisplaySrc            string `json:"display_src"`
+	DisplaySrcset         string `json:"display_srcset"`
+	IsIgtv                bool   `json:"is_igtv"`
+	LikesCount            int    `json:"likes_count"`
+	Media                 *Media `json:"media"`
+	MediaPermalink        string `json:"media_permalink"`
+	RequestID             string `json:"request_id"`
+	Shortcode             string `json:"shortcode"`
+	Title                 string `json:"title"`
+	Type                  string `json:"type"`
+	Username              string `json:"username"`
+	Verified              bool   `json:"verified"`
+	VideoViews            int    `json:"video_views"`
 }
 
 // Time defines a timestamp encoded as epoch seconds in JSON

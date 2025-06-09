@@ -15,6 +15,12 @@
 
 > [InstagramRobot](https://github.com/omegaatt36/instagramrobot) is a bot based on [Telegram Bot API](https://core.telegram.org/bots/api) written in [Golang](https://golang.org/) that allows users to download public [Instagram](https://www.instagram.com/) photos, videos, and albums, without getting the user's credentials.
 
+**Enhanced Features:**
+- **Multiple Extraction Methods**: GraphQL API, embed page parsing, and third-party service fallback
+- **Improved Success Rate**: Better handling of private posts and restricted content
+- **Enhanced Error Handling**: User-friendly error messages and graceful degradation
+- **Web Interface**: HTMX-powered web interface for easy media downloading
+
 <!-- [END description] -->
 
 ## Table of contents
