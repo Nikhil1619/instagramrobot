@@ -86,13 +86,29 @@ func (repo *Extractor) GetPostWithCode(code string) (domain.Media, error) {
 
 // getPostWithGQL attempts to fetch post data using GraphQL API
 func (repo *Extractor) getPostWithGQL(code string) (domain.Media, error) {
-	// This would require implementing GraphQL request similar to the reference
-	// For now, return error to fall back to other methods
-	return domain.Media{}, errors.New("GQL method not implemented yet")
+	mediaList, err := GetGQLMediaList(repo.client, code)
+	if err != nil {
+		return domain.Media{}, fmt.Errorf("failed to get GraphQL media list: %w", err)
+	}
+	
+	if len(mediaList) == 0 {
+		return domain.Media{}, errors.New("no media found in GraphQL response")
+	}
+	
+	// Return the first media item (GraphQL typically returns single media)
+	return *mediaList[0], nil
 }
 
-// getPostWithEmbed uses the existing embed page parsing method
+// getPostWithEmbed uses the embed page parsing method
 func (repo *Extractor) getPostWithEmbed(code string) (domain.Media, error) {
+	// Try the new GraphQL embed parsing first
+	mediaList, err := GetEmbedMediaList(repo.client, code)
+	if err == nil && len(mediaList) > 0 {
+		return *mediaList[0], nil
+	}
+	log.Printf("GraphQL embed method failed: %v", err)
+	
+	// Fall back to original embed parsing
 	URL := fmt.Sprintf("https://www.instagram.com/p/%v/embed/captioned/", code)
 
 	var coverPhoto string
@@ -152,72 +168,33 @@ func (repo *Extractor) getPostWithEmbed(code string) (domain.Media, error) {
 
 // getPostWithThirdParty attempts to use a third-party service as fallback
 func (repo *Extractor) getPostWithThirdParty(code string) (domain.Media, error) {
-	postURL := fmt.Sprintf("https://www.instagram.com/p/%s/", code)
+	mediaList, err := GetIGramMediaList(repo.client, code)
+	if err != nil {
+		return domain.Media{}, fmt.Errorf("failed to get IGram media list: %w", err)
+	}
 	
-	apiURL := fmt.Sprintf("https://%s/api/convert", igramHostname)
-	payload, err := BuildIGramPayload(postURL)
-	if err != nil {
-		return domain.Media{}, fmt.Errorf("failed to build signed payload: %w", err)
-	}
-
-	resp, err := FetchPage(repo.client, "POST", apiURL, payload, igramHeaders)
-	if err != nil {
-		return domain.Media{}, fmt.Errorf("failed to send request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return domain.Media{}, fmt.Errorf("failed to get response: %s", resp.Status)
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return domain.Media{}, fmt.Errorf("failed to read response body: %w", err)
-	}
-
-	response, err := ParseIGramResponse(body)
-	if err != nil {
-		return domain.Media{}, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	if len(response.Items) == 0 {
+	if len(mediaList) == 0 {
 		return domain.Media{}, errors.New("no media items found")
 	}
 
+	// Handle single item vs multiple items
+	if len(mediaList) == 1 {
+		return *mediaList[0], nil
+	}
+	
+	// For multiple items, create a media with Items array
 	media := domain.Media{
 		ShortCode: code,
 		Source:    domain.SourceInstagram,
+		Items:     make([]*domain.MediaItem, 0, len(mediaList)),
 	}
-
-	// Handle single item
-	if len(response.Items) == 1 && len(response.Items[0].URL) > 0 {
-		item := response.Items[0]
-		urlObj := item.URL[0]
-		
-		contentURL, err := GetCDNURL(urlObj.URL)
-		if err != nil {
-			return domain.Media{}, fmt.Errorf("failed to get CDN URL: %w", err)
+	
+	for _, m := range mediaList {
+		item := &domain.MediaItem{
+			URL:     m.URL,
+			IsVideo: m.IsVideo,
 		}
-		
-		media.URL = contentURL
-		media.IsVideo = urlObj.Ext == "mp4"
-	} else {
-		// Handle multiple items
-		for _, item := range response.Items {
-			if len(item.URL) > 0 {
-				urlObj := item.URL[0]
-				contentURL, err := GetCDNURL(urlObj.URL)
-				if err != nil {
-					continue // Skip this item if URL extraction fails
-				}
-				
-				mediaItem := &domain.MediaItem{
-					URL:     contentURL,
-					IsVideo: urlObj.Ext == "mp4",
-				}
-				media.Items = append(media.Items, mediaItem)
-			}
-		}
+		media.Items = append(media.Items, item)
 	}
 
 	return media, nil

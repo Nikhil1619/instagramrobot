@@ -200,7 +200,6 @@ func (s EmbedResponse) GetCaption() string {
 	if len(s.Media.Caption.Edges) > 0 {
 		return s.Media.Caption.Edges[0].Node.Text
 	}
-
 	return s.Media.Title
 }
 

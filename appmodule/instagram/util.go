@@ -154,9 +154,191 @@ func ParseEmbedGQL(body []byte) (*Media, error) {
 		return nil, fmt.Errorf("failed to unmarshal JSON: %w", err)
 	}
 	
-	// Navigate through the JSON structure to find the media data
-	// This is a simplified version - you might need to adjust based on actual response structure
-	return nil, ErrGQLContextNotFound
+	// Navigate through the JSON structure to find contextJSON
+	igCtx := traverseJSON(data, "contextJSON")
+	if igCtx == nil {
+		return nil, ErrGQLContextNotFound
+	}
+	
+	var ctxJSON ContextJSON
+	switch v := igCtx.(type) {
+	case string:
+		if err := json.Unmarshal([]byte(v), &ctxJSON); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal contextJSON: %w", err)
+		}
+	default:
+		return nil, ErrGQLContextMismatch
+	}
+	
+	if ctxJSON.GqlData == nil {
+		return nil, ErrGQLNilResponse
+	}
+	if ctxJSON.GqlData.ShortcodeMedia == nil {
+		return nil, ErrGQLNilMedia
+	}
+	
+	return ctxJSON.GqlData.ShortcodeMedia, nil
+}
+
+// traverseJSON navigates through nested JSON structure to find a key
+func traverseJSON(data map[string]any, key string) any {
+	if val, exists := data[key]; exists {
+		return val
+	}
+	
+	// Recursively search in nested objects
+	for _, v := range data {
+		if nested, ok := v.(map[string]any); ok {
+			if result := traverseJSON(nested, key); result != nil {
+				return result
+			}
+		}
+	}
+	
+	return nil
+}
+
+// GetGQLData fetches Instagram post data using GraphQL API
+func GetGQLData(client *http.Client, shortcode string) (*GraphQLData, error) {
+	graphHeaders, body, err := BuildGQLData()
+	if err != nil {
+		return nil, fmt.Errorf("failed to build GQL data: %w", err)
+	}
+	
+	formData := url.Values{}
+	for key, value := range body {
+		formData.Set(key, value)
+	}
+	formData.Set("fb_api_caller_class", "RelayModern")
+	formData.Set("fb_api_req_friendly_name", polarisAction)
+	
+	variables := map[string]any{
+		"shortcode":               shortcode,
+		"fetch_tagged_user_count": nil,
+		"hoisted_comment_id":      nil,
+		"hoisted_reply_id":        nil,
+	}
+	
+	variablesJSON, err := json.Marshal(variables)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal variables: %w", err)
+	}
+	
+	formData.Set("variables", string(variablesJSON))
+	formData.Set("server_timestamps", "true")
+	formData.Set("doc_id", "8845758582119845")
+
+	// Merge headers
+	for key, value := range webHeaders {
+		graphHeaders[key] = value
+	}
+	
+	resp, err := FetchPage(client, "POST", graphQLEndpoint, strings.NewReader(formData.Encode()), graphHeaders)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("invalid response code: %s", resp.Status)
+	}
+	
+	var response GraphQLResponse
+	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+	
+	if response.Data == nil {
+		return nil, ErrGQLNilResponse
+	}
+	if response.Status != "ok" {
+		return nil, fmt.Errorf("status is not ok: %s", response.Status)
+	}
+	if response.Data.ShortcodeMedia == nil {
+		return nil, ErrGQLNilMedia
+	}
+	
+	return response.Data, nil
+}
+
+// BuildGQLData creates headers and body for GraphQL request
+func BuildGQLData() (map[string]string, map[string]string, error) {
+	const (
+		domain                = "www"
+		requestID             = "b"
+		clientCapabilityGrade = "EXCELLENT"
+		sessionInternalID     = "7436540909012459023"
+		apiVersion            = "1"
+		rolloutHash           = "1019933358"
+		appID                 = "936619743392459"
+		bloksVersionID        = "6309c8d03d8a3f47a1658ba38b304a3f837142ef5f637ebf1f8f52d4b802951e"
+		asbdID                = "129477"
+		hiddenState           = "20126.HYP:instagram_web_pkg.2.1...0"
+		loggedIn              = "0"
+		cometRequestID        = "7"
+		appVersion            = "0"
+		pixelRatio            = "2"
+		buildType             = "trunk"
+	)
+	
+	session := "::" + RandomAlphaString(6)
+	sessionData := RandomBase64(8)
+	csrfToken := RandomBase64(32)
+	deviceID := RandomBase64(24)
+	machineID := RandomBase64(24)
+	dynamicFlags := RandomBase64(154)
+	clientSessionRnd := RandomBase64(154)
+	
+	jazoestBig, err := rand.Int(rand.Reader, big.NewInt(10000))
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to generate jazoest: %w", err)
+	}
+	jazoest := strconv.FormatInt(jazoestBig.Int64()+1, 10)
+	timestamp := strconv.FormatInt(time.Now().Unix(), 10)
+	
+	cookies := []string{
+		"csrftoken=" + csrfToken,
+		"ig_did=" + deviceID,
+		"wd=1280x720",
+		"dpr=2",
+		"mid=" + machineID,
+		"ig_nrcb=1",
+	}
+	
+	headers := map[string]string{
+		"x-ig-app-id":        appID,
+		"X-FB-LSD":           sessionData,
+		"X-CSRFToken":        csrfToken,
+		"X-Bloks-Version-Id": bloksVersionID,
+		"x-asbd-id":          asbdID,
+		"cookie":             strings.Join(cookies, "; "),
+		"Content-Type":       "application/x-www-form-urlencoded",
+		"X-FB-Friendly-Name": polarisAction,
+	}
+	
+	body := map[string]string{
+		"__d":         domain,
+		"__a":         apiVersion,
+		"__s":         session,
+		"__hs":        hiddenState,
+		"__req":       requestID,
+		"__ccg":       clientCapabilityGrade,
+		"__rev":       rolloutHash,
+		"__hsi":       sessionInternalID,
+		"__dyn":       dynamicFlags,
+		"__csr":       clientSessionRnd,
+		"__user":      loggedIn,
+		"__comet_req": cometRequestID,
+		"libav":       appVersion,
+		"dpr":         pixelRatio,
+		"lsd":         sessionData,
+		"jazoest":     jazoest,
+		"__spin_r":    rolloutHash,
+		"__spin_b":    buildType,
+		"__spin_t":    timestamp,
+	}
+	
+	return headers, body, nil
 }
 
 // BuildIGramPayload creates the payload for third-party service
